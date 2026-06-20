@@ -1,11 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { API_URL } from '../config';
 
 const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState('students');
+  const [activeTab, setActiveTab] = useState('studentList');
+  const [students, setStudents] = useState([]);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState({ totalStudents: 0, totalFeesCollected: 0, pendingFees: 0 });
   const navigate = useNavigate();
 
   const token = localStorage.getItem('token');
@@ -13,8 +17,8 @@ const AdminDashboard = () => {
 
   // Add Student form
   const [studentForm, setStudentForm] = useState({
-    email: '', password: '', erp_id: '', roll_number: '',
-    full_name: '', program: '', batch_year: '', phone: ''
+    full_name: '', email: '', password: '', erp_id: '', 
+    roll_number: '', program: '', batch_year: '', phone: ''
   });
 
   // Fee Ledger form
@@ -28,6 +32,30 @@ const AdminDashboard = () => {
     reference_number: '', semester_number: '', academic_year: ''
   });
 
+  useEffect(() => {
+    fetchStudents();
+    fetchStats();
+  }, []);
+
+  const fetchStudents = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/students/all`, { headers });
+      setStudents(res.data.students || []);
+      setStats(prev => ({ ...prev, totalStudents: res.data.students?.length || 0 }));
+    } catch (err) {
+      console.error('Error fetching students:', err);
+    }
+  };
+
+  const fetchStats = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/fees/stats`, { headers });
+      setStats(res.data);
+    } catch (err) {
+      console.error('Error fetching stats:', err);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.clear();
     navigate('/login');
@@ -39,77 +67,58 @@ const AdminDashboard = () => {
     setTimeout(() => { setMessage(''); setError(''); }, 3000);
   };
 
-  // const addStudent = async () => {
-  //   try {
-  //     // First register user
-  //     const userRes = await axios.post('http://localhost:5000/api/auth/register', {
-  //       email: studentForm.email,
-  //       password: studentForm.password,
-  //       role: 'student'
-  //     }, { headers });
-
-  //     // Then create student profile
-  //     await axios.post('http://localhost:5000/api/students', {
-  //       user_id: userRes.data.user.id,
-  //       erp_id: studentForm.erp_id,
-  //       roll_number: studentForm.roll_number,
-  //       full_name: studentForm.full_name,
-  //       program: studentForm.program,
-  //       batch_year: parseInt(studentForm.batch_year),
-  //       email: studentForm.email,
-  //       phone: studentForm.phone
-  //     }, { headers });
-
-  //     showMessage('Student added successfully');
-  //     setStudentForm({
-  //       email: '', password: '', erp_id: '', roll_number: '',
-  //       full_name: '', program: '', batch_year: '', phone: ''
-  //     });
-  //   } catch (err) {
-  //     showMessage(err.response?.data?.message || 'Error adding student', true);
-  //   }
-  // };
   const addStudent = async () => {
-  try {
-    await axios.post('http://localhost:5000/api/students', {
-      full_name: studentForm.full_name,
-      email: studentForm.email,
-      password: studentForm.password,
-      erp_id: studentForm.erp_id,
-      roll_number: studentForm.roll_number,
-      program: studentForm.program,
-      batch_year: parseInt(studentForm.batch_year),
-      phone: studentForm.phone
-    }, { headers });
+    setLoading(true);
+    try {
+      await axios.post(`${API_URL}/api/students`, {
+        full_name: studentForm.full_name,
+        email: studentForm.email,
+        password: studentForm.password,
+        erp_id: studentForm.erp_id,
+        roll_number: studentForm.roll_number,
+        program: studentForm.program,
+        batch_year: parseInt(studentForm.batch_year),
+        phone: studentForm.phone
+      }, { headers });
 
-    showMessage('Student added successfully');
-    setStudentForm({
-      email: '', password: '', erp_id: '', roll_number: '',
-      full_name: '', program: '', batch_year: '', phone: ''
-    });
-  } catch (err) {
-    showMessage(err.response?.data?.message || 'Error adding student', true);
-  }
-};
+      showMessage('✅ Student added successfully');
+      setStudentForm({
+        full_name: '', email: '', password: '', erp_id: '',
+        roll_number: '', program: '', batch_year: '', phone: ''
+      });
+      fetchStudents();
+      fetchStats();
+    } catch (err) {
+      showMessage(err.response?.data?.message || 'Error adding student', true);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const createFeeLedger = async () => {
+    setLoading(true);
     try {
-      await axios.post('http://localhost:5000/api/fees/ledger', {
+      await axios.post(`${API_URL}/api/fees/ledger`, {
         student_id: parseInt(feeForm.student_id),
         academic_year: feeForm.academic_year,
         semester_number: parseInt(feeForm.semester_number),
         total_fee: parseFloat(feeForm.total_fee)
       }, { headers });
-      showMessage('Fee ledger created successfully');
+
+      showMessage('✅ Fee ledger created successfully');
       setFeeForm({ student_id: '', academic_year: '', semester_number: '', total_fee: '' });
+      fetchStats();
     } catch (err) {
       showMessage(err.response?.data?.message || 'Error creating fee ledger', true);
+    } finally {
+      setLoading(false);
     }
   };
 
   const recordPayment = async () => {
+    setLoading(true);
     try {
-      const res = await axios.post('http://localhost:5000/api/fees/payment', {
+      const res = await axios.post(`${API_URL}/api/fees/payment`, {
         student_id: parseInt(paymentForm.student_id),
         amount: parseFloat(paymentForm.amount),
         type: paymentForm.type,
@@ -118,7 +127,7 @@ const AdminDashboard = () => {
         academic_year: paymentForm.academic_year
       }, { headers });
       
-      let msg = 'Payment recorded successfully';
+      let msg = '✅ Payment recorded successfully';
       if (res.data.excessAddedToWallet) {
         msg += ` — ₹${res.data.excessAddedToWallet} added to wallet`;
       }
@@ -127,28 +136,113 @@ const AdminDashboard = () => {
         student_id: '', amount: '', type: 'online',
         reference_number: '', semester_number: '', academic_year: ''
       });
+      fetchStats();
     } catch (err) {
       showMessage(err.response?.data?.message || 'Error recording payment', true);
+    } finally {
+      setLoading(false);
     }
   };
+
+  // Student List Table
+  const renderStudentList = () => (
+    <div style={styles.card}>
+      <div style={styles.cardHeader}>
+        <h2 style={styles.cardTitle}>📋 Student Directory</h2>
+        <button style={styles.smallButton} onClick={() => setActiveTab('addStudent')}>+ Add New</button>
+      </div>
+      <div style={styles.tableContainer}>
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>ERP ID</th>
+              <th>Roll No</th>
+              <th>Full Name</th>
+              <th>Program</th>
+              <th>Batch</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {students.map(student => (
+              <tr key={student.id}>
+                <td>{student.id}</td>
+                <td><code>{student.erp_id}</code></td>
+                <td>{student.roll_number}</td>
+                <td><strong>{student.full_name}</strong></td>
+                <td>{student.program}</td>
+                <td>{student.batch_year}</td>
+                <td><span style={styles.statusBadge}>{student.status}</span></td>
+              </tr>
+            ))}
+            {students.length === 0 && (
+              <tr><td colSpan="7" style={styles.emptyRow}>No students found. Add your first student!</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  // Stats Cards
+  const renderStats = () => (
+    <div style={styles.statsGrid}>
+      <div style={styles.statCard}>
+        <div style={styles.statIcon}>👨‍🎓</div>
+        <div>
+          <div style={styles.statValue}>{stats.totalStudents}</div>
+          <div style={styles.statLabel}>Total Students</div>
+        </div>
+      </div>
+      <div style={styles.statCard}>
+        <div style={styles.statIcon}>💰</div>
+        <div>
+          <div style={styles.statValue}>₹{stats.totalFeesCollected?.toLocaleString() || 0}</div>
+          <div style={styles.statLabel}>Fees Collected</div>
+        </div>
+      </div>
+      <div style={styles.statCard}>
+        <div style={styles.statIcon}>⏳</div>
+        <div>
+          <div style={styles.statValue}>₹{stats.pendingFees?.toLocaleString() || 0}</div>
+          <div style={styles.statLabel}>Pending Fees</div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Tabs
+  const tabs = [
+    { id: 'studentList', label: '📋 Student List', icon: '👥' },
+    { id: 'addStudent', label: '➕ Add Student', icon: '👨‍🎓' },
+    { id: 'feeLedger', label: '💰 Fee Ledger', icon: '📝' },
+    { id: 'payments', label: '💳 Payments', icon: '💵' },
+  ];
 
   return (
     <div style={styles.container}>
       {/* Header */}
       <div style={styles.header}>
-        <h1 style={styles.headerTitle}>Admin Dashboard</h1>
-        <button onClick={handleLogout} style={styles.logoutBtn}>Logout</button>
+        <div>
+          <h1 style={styles.headerTitle}>Admin Dashboard</h1>
+          <p style={styles.headerSubtitle}>Manage students, fees, and payments</p>
+        </div>
+        <button onClick={handleLogout} style={styles.logoutBtn}>🚪 Logout</button>
       </div>
+
+      {/* Stats Cards */}
+      {renderStats()}
 
       {/* Tabs */}
       <div style={styles.tabs}>
-        {['students', 'fees', 'payments'].map(tab => (
+        {tabs.map(tab => (
           <button
-            key={tab}
-            style={activeTab === tab ? {...styles.tab, ...styles.activeTab} : styles.tab}
-            onClick={() => setActiveTab(tab)}
+            key={tab.id}
+            style={activeTab === tab.id ? {...styles.tab, ...styles.activeTab} : styles.tab}
+            onClick={() => setActiveTab(tab.id)}
           >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab.label}
           </button>
         ))}
       </div>
@@ -157,96 +251,65 @@ const AdminDashboard = () => {
         {message && <div style={styles.success}>{message}</div>}
         {error && <div style={styles.error}>{error}</div>}
 
-        {/* Add Student */}
-        {activeTab === 'students' && (
+        {/* Student List Tab */}
+        {activeTab === 'studentList' && renderStudentList()}
+
+        {/* Add Student Tab */}
+        {activeTab === 'addStudent' && (
           <div style={styles.card}>
             <h2 style={styles.cardTitle}>Add New Student</h2>
-            {[
-              { key: 'full_name', label: 'Full Name', type: 'text' },
-              { key: 'email', label: 'Email', type: 'email' },
-              { key: 'password', label: 'Password', type: 'password' },
-              { key: 'erp_id', label: 'ERP ID', type: 'text' },
-              { key: 'roll_number', label: 'Roll Number', type: 'text' },
-              { key: 'program', label: 'Program (e.g. B.Tech CSE)', type: 'text' },
-              { key: 'batch_year', label: 'Batch Year (e.g. 2022)', type: 'number' },
-              { key: 'phone', label: 'Phone', type: 'text' }
-            ].map(field => (
-              <div key={field.key} style={styles.field}>
-                <label style={styles.label}>{field.label}</label>
-                <input
-                  style={styles.input}
-                  type={field.type}
-                  value={studentForm[field.key]}
-                  onChange={e => setStudentForm({...studentForm, [field.key]: e.target.value})}
-                  placeholder={field.label}
-                />
-              </div>
-            ))}
-            <button style={styles.button} onClick={addStudent}>Add Student</button>
+            <div style={styles.formGrid}>
+              <input style={styles.input} placeholder="Full Name" value={studentForm.full_name} onChange={e => setStudentForm({...studentForm, full_name: e.target.value})} />
+              <input style={styles.input} placeholder="Email" type="email" value={studentForm.email} onChange={e => setStudentForm({...studentForm, email: e.target.value})} />
+              <input style={styles.input} placeholder="Password" type="password" value={studentForm.password} onChange={e => setStudentForm({...studentForm, password: e.target.value})} />
+              <input style={styles.input} placeholder="ERP ID" value={studentForm.erp_id} onChange={e => setStudentForm({...studentForm, erp_id: e.target.value})} />
+              <input style={styles.input} placeholder="Roll Number" value={studentForm.roll_number} onChange={e => setStudentForm({...studentForm, roll_number: e.target.value})} />
+              <input style={styles.input} placeholder="Program (e.g., B.Tech CSE)" value={studentForm.program} onChange={e => setStudentForm({...studentForm, program: e.target.value})} />
+              <input style={styles.input} placeholder="Batch Year" type="number" value={studentForm.batch_year} onChange={e => setStudentForm({...studentForm, batch_year: e.target.value})} />
+              <input style={styles.input} placeholder="Phone" value={studentForm.phone} onChange={e => setStudentForm({...studentForm, phone: e.target.value})} />
+            </div>
+            <button style={styles.button} onClick={addStudent} disabled={loading}>
+              {loading ? 'Adding...' : '➕ Add Student'}
+            </button>
           </div>
         )}
 
-        {/* Create Fee Ledger */}
-        {activeTab === 'fees' && (
+        {/* Fee Ledger Tab */}
+        {activeTab === 'feeLedger' && (
           <div style={styles.card}>
             <h2 style={styles.cardTitle}>Create Fee Ledger</h2>
-            {[
-              { key: 'student_id', label: 'Student ID', type: 'number' },
-              { key: 'academic_year', label: 'Academic Year (e.g. 2025-26)', type: 'text' },
-              { key: 'semester_number', label: 'Semester Number', type: 'number' },
-              { key: 'total_fee', label: 'Total Fee (₹)', type: 'number' }
-            ].map(field => (
-              <div key={field.key} style={styles.field}>
-                <label style={styles.label}>{field.label}</label>
-                <input
-                  style={styles.input}
-                  type={field.type}
-                  value={feeForm[field.key]}
-                  onChange={e => setFeeForm({...feeForm, [field.key]: e.target.value})}
-                  placeholder={field.label}
-                />
-              </div>
-            ))}
-            <button style={styles.button} onClick={createFeeLedger}>Create Fee Ledger</button>
+            <div style={styles.formGrid}>
+              <input style={styles.input} placeholder="Student ID" type="number" value={feeForm.student_id} onChange={e => setFeeForm({...feeForm, student_id: e.target.value})} />
+              <input style={styles.input} placeholder="Academic Year (e.g., 2025-26)" value={feeForm.academic_year} onChange={e => setFeeForm({...feeForm, academic_year: e.target.value})} />
+              <input style={styles.input} placeholder="Semester Number" type="number" value={feeForm.semester_number} onChange={e => setFeeForm({...feeForm, semester_number: e.target.value})} />
+              <input style={styles.input} placeholder="Total Fee (₹)" type="number" value={feeForm.total_fee} onChange={e => setFeeForm({...feeForm, total_fee: e.target.value})} />
+            </div>
+            <button style={styles.button} onClick={createFeeLedger} disabled={loading}>
+              {loading ? 'Creating...' : '📝 Create Fee Ledger'}
+            </button>
           </div>
         )}
 
-        {/* Record Payment */}
+        {/* Payments Tab */}
         {activeTab === 'payments' && (
           <div style={styles.card}>
             <h2 style={styles.cardTitle}>Record Payment</h2>
-            {[
-              { key: 'student_id', label: 'Student ID', type: 'number' },
-              { key: 'amount', label: 'Amount (₹)', type: 'number' },
-              { key: 'reference_number', label: 'Reference Number', type: 'text' },
-              { key: 'semester_number', label: 'Semester Number', type: 'number' },
-              { key: 'academic_year', label: 'Academic Year (e.g. 2025-26)', type: 'text' }
-            ].map(field => (
-              <div key={field.key} style={styles.field}>
-                <label style={styles.label}>{field.label}</label>
-                <input
-                  style={styles.input}
-                  type={field.type}
-                  value={paymentForm[field.key]}
-                  onChange={e => setPaymentForm({...paymentForm, [field.key]: e.target.value})}
-                  placeholder={field.label}
-                />
-              </div>
-            ))}
-            <div style={styles.field}>
-              <label style={styles.label}>Payment Type</label>
-              <select
-                style={styles.input}
-                value={paymentForm.type}
-                onChange={e => setPaymentForm({...paymentForm, type: e.target.value})}
-              >
-                <option value="online">Online</option>
-                <option value="challan">Challan</option>
-                <option value="loan">Loan</option>
-                <option value="concession">Concession</option>
+            <div style={styles.formGrid}>
+              <input style={styles.input} placeholder="Student ID" type="number" value={paymentForm.student_id} onChange={e => setPaymentForm({...paymentForm, student_id: e.target.value})} />
+              <input style={styles.input} placeholder="Amount (₹)" type="number" value={paymentForm.amount} onChange={e => setPaymentForm({...paymentForm, amount: e.target.value})} />
+              <input style={styles.input} placeholder="Reference Number" value={paymentForm.reference_number} onChange={e => setPaymentForm({...paymentForm, reference_number: e.target.value})} />
+              <input style={styles.input} placeholder="Semester Number" type="number" value={paymentForm.semester_number} onChange={e => setPaymentForm({...paymentForm, semester_number: e.target.value})} />
+              <input style={styles.input} placeholder="Academic Year (e.g., 2025-26)" value={paymentForm.academic_year} onChange={e => setPaymentForm({...paymentForm, academic_year: e.target.value})} />
+              <select style={styles.input} value={paymentForm.type} onChange={e => setPaymentForm({...paymentForm, type: e.target.value})}>
+                <option value="online">💳 Online</option>
+                <option value="challan">🏦 Challan</option>
+                <option value="loan">🏧 Loan</option>
+                <option value="concession">🎓 Concession</option>
               </select>
             </div>
-            <button style={styles.button} onClick={recordPayment}>Record Payment</button>
+            <button style={styles.button} onClick={recordPayment} disabled={loading}>
+              {loading ? 'Processing...' : '💳 Record Payment'}
+            </button>
           </div>
         )}
       </div>
@@ -255,79 +318,129 @@ const AdminDashboard = () => {
 };
 
 const styles = {
-  container: { minHeight: '100vh', backgroundColor: '#f0f2f5' },
+  container: { minHeight: '100vh', backgroundColor: '#f5f6fa' },
   header: {
-    backgroundColor: '#4f46e5',
-    padding: '16px 32px',
+    backgroundColor: '#1a1a2e',
+    padding: '20px 32px',
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center'
+    alignItems: 'center',
+    color: 'white',
   },
-  headerTitle: { color: 'white', margin: 0, fontSize: '20px' },
+  headerTitle: { margin: 0, fontSize: '24px', fontWeight: '600' },
+  headerSubtitle: { margin: '4px 0 0', fontSize: '14px', opacity: 0.7 },
   logoutBtn: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     color: 'white',
     border: 'none',
-    padding: '8px 16px',
-    borderRadius: '6px',
-    cursor: 'pointer'
+    padding: '10px 20px',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '14px',
   },
-  tabs: {
+  statsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    gap: '20px',
+    padding: '24px 32px',
     backgroundColor: 'white',
-    padding: '0 32px',
+    margin: '20px',
+    borderRadius: '16px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+  },
+  statCard: {
     display: 'flex',
-    borderBottom: '1px solid #e5e7eb'
+    alignItems: 'center',
+    gap: '16px',
+  },
+  statIcon: { fontSize: '40px' },
+  statValue: { fontSize: '28px', fontWeight: '700', color: '#1a1a2e' },
+  statLabel: { fontSize: '14px', color: '#666' },
+  tabs: {
+    display: 'flex',
+    gap: '8px',
+    padding: '0 32px',
+    marginBottom: '20px',
   },
   tab: {
-    padding: '16px 24px',
+    padding: '12px 24px',
+    backgroundColor: 'white',
     border: 'none',
-    backgroundColor: 'transparent',
+    borderRadius: '8px',
     cursor: 'pointer',
     fontSize: '14px',
     fontWeight: '500',
-    color: '#666'
+    color: '#666',
+    transition: 'all 0.3s',
   },
   activeTab: {
-    color: '#4f46e5',
-    borderBottom: '2px solid #4f46e5'
+    backgroundColor: '#4f46e5',
+    color: 'white',
   },
-  content: { maxWidth: '600px', margin: '0 auto', padding: '32px 16px' },
+  content: { padding: '0 32px 32px' },
   card: {
     backgroundColor: 'white',
     padding: '24px',
-    borderRadius: '12px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+    borderRadius: '16px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
   },
-  cardTitle: { margin: '0 0 24px 0', fontSize: '18px', fontWeight: '600', color: '#1a1a2e' },
-  field: { marginBottom: '16px' },
-  label: { display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#333' },
+  cardHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '20px',
+  },
+  cardTitle: { margin: 0, fontSize: '18px', fontWeight: '600', color: '#1a1a2e' },
+  smallButton: {
+    padding: '8px 16px',
+    backgroundColor: '#4f46e5',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+  },
+  formGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+    gap: '16px',
+    marginBottom: '24px',
+  },
   input: {
-    width: '100%',
-    padding: '10px 12px',
-    border: '1px solid #ddd',
+    padding: '12px',
+    border: '1px solid #e5e7eb',
     borderRadius: '8px',
     fontSize: '14px',
-    boxSizing: 'border-box'
+    outline: 'none',
   },
   button: {
-    width: '100%',
-    padding: '12px',
+    padding: '12px 24px',
     backgroundColor: '#4f46e5',
     color: 'white',
     border: 'none',
     borderRadius: '8px',
-    fontSize: '15px',
-    fontWeight: '600',
     cursor: 'pointer',
-    marginTop: '8px'
+    fontWeight: '600',
+    fontSize: '14px',
   },
-  success: {
+  tableContainer: { overflowX: 'auto' },
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+  },
+  statusBadge: {
+    padding: '4px 10px',
     backgroundColor: '#dcfce7',
     color: '#16a34a',
+    borderRadius: '20px',
+    fontSize: '12px',
+  },
+  emptyRow: { textAlign: 'center', padding: '40px', color: '#999' },
+  success: {
+    backgroundColor: '#d1fae5',
+    color: '#065f46',
     padding: '12px',
     borderRadius: '8px',
     marginBottom: '20px',
-    fontSize: '14px'
   },
   error: {
     backgroundColor: '#fee2e2',
@@ -335,8 +448,7 @@ const styles = {
     padding: '12px',
     borderRadius: '8px',
     marginBottom: '20px',
-    fontSize: '14px'
-  }
+  },
 };
 
 export default AdminDashboard;
