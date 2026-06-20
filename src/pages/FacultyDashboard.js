@@ -22,30 +22,46 @@ const FacultyDashboard = () => {
   const headers = { authorization: token };
 
   useEffect(() => {
+    console.log('🔍 FacultyDashboard mounted');
+    console.log('📋 userId from localStorage:', userId);
+    console.log('🔑 token present:', !!token);
     fetchFacultyProfile();
   }, []);
 
   const fetchFacultyProfile = async () => {
     try {
+      console.log('👤 Fetching faculty profile for userId:', userId);
       const profileRes = await axios.get(`${API_URL}/api/faculty/profile/${userId}`, { headers });
+      console.log('👤 Profile Response:', profileRes.data);
+      
       const facultyProfileId = profileRes.data.faculty.id;
+      console.log('📋 Faculty Profile ID:', facultyProfileId);
       setFacultyInfo(profileRes.data.faculty);
       await fetchCourses(facultyProfileId);
     } catch (err) {
-      console.error('Error fetching faculty profile:', err);
+      console.error('❌ Error fetching faculty profile:', err);
+      console.error('❌ Error details:', err.response?.data);
       setLoading(false);
     }
   };
 
   const fetchCourses = async (facultyProfileId) => {
     try {
+      console.log('📚 Fetching courses for faculty ID:', facultyProfileId);
+      console.log('🔑 Headers being sent:', headers);
+      
       const res = await axios.get(`${API_URL}/api/faculty/courses/${facultyProfileId}`, { headers });
+      console.log('📚 API Response:', res.data);
+      
       const uniqueCourses = res.data.courses?.filter((course, index, self) => 
         index === self.findIndex(c => c.id === course.id)
       ) || [];
+      console.log('📚 Unique Courses:', uniqueCourses);
+      
       setCourses(uniqueCourses);
     } catch (err) {
-      console.error('Error fetching courses:', err);
+      console.error('❌ Error fetching courses:', err);
+      console.error('❌ Error details:', err.response?.data);
       setCourses([]);
     } finally {
       setLoading(false);
@@ -54,7 +70,9 @@ const FacultyDashboard = () => {
 
   const fetchStudents = async (courseId, enrollmentId) => {
     try {
+      console.log('👨‍🎓 Fetching students for course:', courseId);
       const res = await axios.get(`${API_URL}/api/faculty/course/${courseId}/students`, { headers });
+      console.log('👨‍🎓 Students response:', res.data);
       setStudents(res.data.students || []);
       setSelectedCourse({ id: courseId, enrollmentId });
       const initialMarks = {};
@@ -63,7 +81,7 @@ const FacultyDashboard = () => {
       });
       setMarksData(initialMarks);
     } catch (err) {
-      console.error('Error fetching students:', err);
+      console.error('❌ Error fetching students:', err);
       setStudents([]);
     }
   };
@@ -81,6 +99,7 @@ const FacultyDashboard = () => {
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
       setMessage('❌ Error marking attendance');
+      console.error('❌ Attendance error:', err);
     }
   };
 
