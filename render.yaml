@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: college-erp-frontend
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npx serve -s build -l 10000
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://college-erp-api-j04e.onrender.com
