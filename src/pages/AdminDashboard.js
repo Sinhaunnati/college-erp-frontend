@@ -2,6 +2,32 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { API_URL } from '../config';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+  PointElement,
+  LineElement,
+} from 'chart.js';
+import { Bar, Pie, Doughnut } from 'react-chartjs-2';
+
+// Register ChartJS components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+  PointElement,
+  LineElement
+);
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('studentList');
@@ -10,6 +36,7 @@ const AdminDashboard = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({ totalStudents: 0, totalFeesCollected: 0, pendingFees: 0 });
+  const [analytics, setAnalytics] = useState(null);
   const navigate = useNavigate();
 
   const token = localStorage.getItem('token');
@@ -35,6 +62,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     fetchStudents();
     fetchStats();
+    fetchAnalytics();
   }, []);
 
   const fetchStudents = async () => {
@@ -53,6 +81,15 @@ const AdminDashboard = () => {
       setStats(res.data);
     } catch (err) {
       console.error('Error fetching stats:', err);
+    }
+  };
+
+  const fetchAnalytics = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/admin/analytics`, { headers });
+      setAnalytics(res.data);
+    } catch (err) {
+      console.error('Error fetching analytics:', err);
     }
   };
 
@@ -137,11 +174,64 @@ const AdminDashboard = () => {
         reference_number: '', semester_number: '', academic_year: ''
       });
       fetchStats();
+      fetchAnalytics();
     } catch (err) {
       showMessage(err.response?.data?.message || 'Error recording payment', true);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Chart Data
+  const feeChartData = {
+    labels: analytics?.feeCollection?.map(item => 
+      new Date(item.month).toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
+    ) || [],
+    datasets: [
+      {
+        label: 'Fees Collected (₹)',
+        data: analytics?.feeCollection?.map(item => item.total) || [],
+        backgroundColor: 'rgba(79, 70, 229, 0.8)',
+        borderColor: 'rgba(79, 70, 229, 1)',
+        borderWidth: 2,
+      },
+    ],
+  };
+
+  const attendanceChartData = {
+    labels: analytics?.attendance?.map(item => item.range) || [],
+    datasets: [
+      {
+        label: 'Students',
+        data: analytics?.attendance?.map(item => item.count) || [],
+        backgroundColor: ['#22c55e', '#eab308', '#ef4444'],
+        borderWidth: 1,
+      },
+    ],
+  };
+
+  const feeStatusChartData = {
+    labels: analytics?.feeStatus?.map(item => item.status) || [],
+    datasets: [
+      {
+        label: 'Fee Status',
+        data: analytics?.feeStatus?.map(item => item.count) || [],
+        backgroundColor: ['#22c55e', '#eab308', '#ef4444'],
+        borderWidth: 1,
+      },
+    ],
+  };
+
+  const studentStatusChartData = {
+    labels: analytics?.studentStatus?.map(item => item.status) || [],
+    datasets: [
+      {
+        label: 'Students',
+        data: analytics?.studentStatus?.map(item => item.count) || [],
+        backgroundColor: ['#3b82f6', '#22c55e', '#ef4444'],
+        borderWidth: 1,
+      },
+    ],
   };
 
   // Student List Table
@@ -212,12 +302,74 @@ const AdminDashboard = () => {
     </div>
   );
 
+  // Analytics Charts
+  const renderAnalytics = () => (
+    <div style={styles.analyticsGrid}>
+      <div style={styles.chartCard}>
+        <h3 style={styles.chartTitle}>📈 Fee Collection Trend</h3>
+        <div style={styles.chartContainer}>
+          <Bar 
+            data={feeChartData} 
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { position: 'top' } },
+              scales: {
+                y: { beginAtZero: true },
+              },
+            }} 
+          />
+        </div>
+      </div>
+      <div style={styles.chartCard}>
+        <h3 style={styles.chartTitle}>📊 Attendance Distribution</h3>
+        <div style={styles.chartContainer}>
+          <Pie 
+            data={attendanceChartData} 
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { position: 'bottom' } },
+            }} 
+          />
+        </div>
+      </div>
+      <div style={styles.chartCard}>
+        <h3 style={styles.chartTitle}>💳 Fee Status</h3>
+        <div style={styles.chartContainer}>
+          <Doughnut 
+            data={feeStatusChartData} 
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { position: 'bottom' } },
+            }} 
+          />
+        </div>
+      </div>
+      <div style={styles.chartCard}>
+        <h3 style={styles.chartTitle}>👥 Student Status</h3>
+        <div style={styles.chartContainer}>
+          <Pie 
+            data={studentStatusChartData} 
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: { legend: { position: 'bottom' } },
+            }} 
+          />
+        </div>
+      </div>
+    </div>
+  );
+
   // Tabs
   const tabs = [
-    { id: 'studentList', label: '📋 Student List', icon: '👥' },
-    { id: 'addStudent', label: '➕ Add Student', icon: '👨‍🎓' },
-    { id: 'feeLedger', label: '💰 Fee Ledger', icon: '📝' },
-    { id: 'payments', label: '💳 Payments', icon: '💵' },
+    { id: 'studentList', label: '📋 Student List' },
+    { id: 'addStudent', label: '➕ Add Student' },
+    { id: 'feeLedger', label: '💰 Fee Ledger' },
+    { id: 'payments', label: '💳 Payments' },
+    { id: 'analytics', label: '📊 Analytics' },
   ];
 
   return (
@@ -253,6 +405,9 @@ const AdminDashboard = () => {
 
         {/* Student List Tab */}
         {activeTab === 'studentList' && renderStudentList()}
+
+        {/* Analytics Tab */}
+        {activeTab === 'analytics' && renderAnalytics()}
 
         {/* Add Student Tab */}
         {activeTab === 'addStudent' && (
@@ -361,6 +516,7 @@ const styles = {
     gap: '8px',
     padding: '0 32px',
     marginBottom: '20px',
+    flexWrap: 'wrap',
   },
   tab: {
     padding: '12px 24px',
@@ -448,6 +604,27 @@ const styles = {
     padding: '12px',
     borderRadius: '8px',
     marginBottom: '20px',
+  },
+  analyticsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+    gap: '20px',
+  },
+  chartCard: {
+    backgroundColor: 'white',
+    padding: '20px',
+    borderRadius: '16px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+  },
+  chartTitle: {
+    fontSize: '16px',
+    fontWeight: '600',
+    color: '#1a1a2e',
+    margin: '0 0 16px 0',
+  },
+  chartContainer: {
+    height: '250px',
+    position: 'relative',
   },
 };
 
